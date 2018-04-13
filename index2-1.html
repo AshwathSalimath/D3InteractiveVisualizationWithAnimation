@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Yearly Exports</title>
+    <meta charset="utf-8">
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <style>
+      *, body {
+        margin: 0;
+      }
+      .axis path, .axis line {
+        fill: none;
+        stroke: black;
+      }
+      .axis text {
+        font-family: sans-serif;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="content">
+      <button>Hide Labels</button>
+
+    </div>
+    <script>
+  	var data = {}; // a Global
+    var country_attrs = {}; //Global Country Attrs Variable
+
+    //Initializing Width, Height and SVG Canvas
+    var width = window.innerWidth,
+        height = window.innerHeight;
+
+    //Based on code from https://bl.ocks.org/mbostock/6738109
+    var superscript = "⁰¹²³⁴⁵⁶⁷⁸⁹",
+    formatPower = function(d) {
+      return (d + "").split("").map(function(c) {
+        return superscript[c];
+      }).join(""); };
+
+    //As the Values on X and Y axis are larger, we need to scale them
+    var x_scale = d3.scale.log().range([0, width]);
+    var y_scale = d3.scale.log().range([height, 0]);
+
+    var x_axis = d3.svg.axis()
+      .scale(x_scale)
+      .ticks(10, function(d) {
+        return 10 + formatPower(Math.round(Math.log(d) / Math.LN10));
+      })
+      .orient("top");
+
+    var y_axis = d3.svg.axis()
+      .scale(y_scale)
+      .ticks(10, function(d) {
+        return 10 + formatPower(Math.round(Math.log(d) / Math.LN10));
+      })
+      .orient("right");
+
+    var svg = d3.select("#content").append("svg")
+        .attr("viewBox", "0 0 " + width + " " + height)
+        .attr("width", width)
+        .attr("height", height);
+
+    //Fetch Country data
+    d3.json("http://atlas.media.mit.edu/attr/country/", function(error, countries) {
+      if (error) return console.warn(error);
+      countries.data.forEach(function(d) {
+        country_attrs[d.id] = d;
+      });
+    });
+
+    //Fetch 2010 Data
+  	d3.json("http://atlas.media.mit.edu/hs92/export/2010/show/all/all/", function(error_2010, json_2010) {
+
+  	if (error_2010) return console.warn(error_2010);
+  	json_2010.data.forEach(function(d) {
+  		data[d.origin_id] = {
+  			export_val_2010: d.export_val,
+  			id: d.origin_id
+  		};
+  	});
+
+  	d3.json("https://atlas.media.mit.edu/hs92/export/2011/show/all/all/", function(error_2011, json_2011) {
+
+  	if (error_2011) return console.warn(error_2011);
+  	json_2011.data.forEach(function(d) {
+  		if (data[d.origin_id]) {
+  			data[d.origin_id]["export_val_2011"] = d.export_val;
+  			};
+  	});
+
+  	console.log(data);
+
+    x_scale.domain(d3.extent(d3.values(data), function(d){
+      return d.export_val_2010;
+    }));
+    y_scale.domain(d3.extent(d3.values(data), function(d){
+      return d.export_val_2011;
+    }));
+
+    //Draw X-axis
+    svg.append("g")
+      .attr("transform", "translate(0,"+(height -1)+")")
+      .attr("class", "axis")
+      .call(x_axis);
+
+    //Draw Y-axis
+    svg.append("g")
+      .attr("class", "axis")
+      .call(y_axis);
+
+    //Adding labels to the chart with Country IDs
+    var country_g = svg.selectAll("g.country")
+      .data(d3.values(data))
+      .enter()
+      .append("g")
+      .attr("class", "country");
+
+    country_g.append("circle")
+      .attr("cx", function(d) {return x_scale(d["export_val_2010"]); })
+      .attr("cy", function(d) {
+        if (d["export_val_2011"]) {
+          return y_scale(d["export_val_2011"]);
+        }
+        return y_scale.range()[0] })
+      .attr("r", 5)
+      .attr("fill", function(d) {
+        return country_attrs[d.id]["color"];
+      });
+
+    country_g.append("text")
+      .attr("x", function(d) {return x_scale(d["export_val_2010"]); })
+      .attr("y", function(d) {
+        if (d["export_val_2011"]) {
+          return y_scale(d["export_val_2011"]);
+        }
+        return y_scale.range()[0] })
+      .attr("fill", function(d) {
+        return country_attrs[d.id]["color"];
+      })
+      .text(function(d) {
+        if (country_attrs[d.id]["display_id"]) {
+          return country_attrs[d.id]["display_id"].toUpperCase();
+        }
+      });
+
+  	});
+
+  	});
+
+    //Hide Label-Show Label Logic
+    d3.select("button").on("click", function(d) {
+      var current_display = d3.select("g.country text").style("display");
+      if (current_display == "none") {
+        d3.select(this).text("Hide Labels");
+        d3.selectAll("g.country text").style("display", "block");
+      } else {
+          d3.select(this).text("Show Labels");
+          d3.selectAll("g.country text").style("display", "none");
+      }
+    })
+
+    </script>
+  </body>
+</html>
